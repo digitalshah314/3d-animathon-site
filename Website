@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MANWAH — Manga Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #080808;
+    --accent: #e8ff47;
+    --accent2: #ff4747;
+    --text-primary: rgba(255,255,255,0.92);
+    --text-secondary: rgba(255,255,255,0.55);
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* CUSTOM CURSOR */
+  #cursor {
+    position: fixed;
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    transition: transform 0.1s, width 0.2s, height 0.2s, background 0.2s;
+    mix-blend-mode: difference;
+  }
+  #cursor-ring {
+    position: fixed;
+    width: 36px; height: 36px;
+    border: 1px solid rgba(232,255,71,0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    transform: translate(-50%, -50%);
+    transition: transform 0.15s ease-out, width 0.3s, height 0.3s;
+  }
+
+  /* PRELOADER */
+  #preloader {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    transition: opacity 0.8s ease, visibility 0.8s ease;
+  }
+  #preloader.hidden { opacity: 0; visibility: hidden; }
+
+  .preloader-brand {
+    font-family: var(--font-display);
+    font-size: clamp(24px, 5vw, 48px);
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: var(--text-primary);
+  }
+  .preloader-brand span { color: var(--accent); }
+
+  .spinner-wrap {
+    position: relative;
+    width: 64px; height: 64px;
+  }
+  .spinner {
+    width: 64px; height: 64px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  .spinner-inner {
+    position: absolute;
+    inset: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(232,255,71,0.4);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite reverse;
+  }
+
+  #preload-progress {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text-secondary);
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* HEADER */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 500;
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    mix-blend-mode: normal;
+  }
+  .logo {
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: 0.2em;
+    color: var(--text-primary);
+  }
+  .logo em { color: var(--accent); font-style: normal; }
+  nav {
+    display: flex;
+    gap: 32px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text-secondary);
+  }
+  nav a { color: inherit; text-decoration: none; transition: color 0.2s; }
+  nav a:hover { color: var(--accent); }
+
+  /* CANVAS SECTION */
+  #canvas-section {
+    position: relative;
+    height: 400vh;
+    background: var(--bg);
+  }
+
+  #sticky-canvas-wrap {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  canvas#main-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* SCROLL TEXT OVERLAYS */
+  .text-overlay {
+    position: absolute;
+    z-index: 10;
+    pointer-events: none;
+    transition: none;
+  }
+
+  #text-hero {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: min(700px, 90vw);
+  }
+  #text-hero .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+  #text-hero h1 {
+    font-size: clamp(42px, 8vw, 96px);
+    font-weight: 800;
+    line-height: 0.95;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+  #text-hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+    display: block;
+  }
+  #text-hero p {
+    margin-top: 24px;
+    font-size: clamp(13px, 1.6vw, 16px);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-weight: 300;
+    line-height: 1.7;
+    letter-spacing: 0.04em;
+  }
+
+  #text-feature1 {
+    top: 50%;
+    left: 6vw;
+    transform: translateY(-50%);
+    max-width: min(380px, 45vw);
+  }
+  #text-feature2 {
+    top: 50%;
+    right: 6vw;
+    left: auto;
+    transform: translateY(-50%);
+    text-align: right;
+    max-width: min(380px, 45vw);
+  }
+  #text-cta {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: min(600px, 90vw);
+  }
+
+  .feature-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .feature-headline {
+    font-size: clamp(26px, 4vw, 52px);
+    font-weight: 800;
+    line-height: 1.05;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+  .feature-body {
+    font-family: var(--font-mono);
+    font-size: clamp(11px, 1.2vw, 13px);
+    color: var(--text-secondary);
+    line-height: 1.8;
+    font-weight: 300;
+  }
+  .feature-num {
+    font-size: clamp(80px, 12vw, 140px);
+    font-weight: 800;
+    color: rgba(232,255,71,0.06);
+    line-height: 1;
+    margin-bottom: -20px;
+    display: block;
+  }
+
+  #text-cta .cta-headline {
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+  #text-cta .cta-sub {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 40px;
+    letter-spacing: 0.05em;
+  }
+  .btn-primary {
+    display: inline-block;
+    padding: 16px 48px;
+    background: var(--accent);
+    color: #000;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border: none;
+    cursor: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+    clip-path: polygon(0 0, 100% 0, 100% 70%, 95% 100%, 0 100%);
+  }
+  .btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 20px 60px rgba(232,255,71,0.3);
+  }
+
+  /* PROGRESS INDICATOR */
+  #scroll-progress {
+    position: fixed;
+    right: 32px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+  }
+  .progress-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: background 0.4s, transform 0.4s;
+  }
+  .progress-dot.active {
+    background: var(--accent);
+    transform: scale(1.5);
+  }
+
+  /* VERTICAL LINES DECORATION */
+  .vert-line {
+    position: fixed;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(255,255,255,0.04);
+    pointer-events: none;
+    z-index: 1;
+  }
+  #vl1 { left: 15%; }
+  #vl2 { left: 85%; }
+
+  /* SECTIONS AFTER CANVAS */
+  #specs-section {
+    background: var(--bg);
+    padding: 120px 8vw;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .specs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .spec-item {
+    padding: 48px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .spec-item:nth-child(odd) { padding-right: 60px; border-right: 1px solid rgba(255,255,255,0.06); }
+  .spec-item:nth-child(even) { padding-left: 60px; }
+  .spec-num {
+    font-size: clamp(40px, 6vw, 72px);
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.03em;
+  }
+  .spec-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    text-transform: uppercase;
+  }
+
+  #footer {
+    padding: 48px 8vw;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+  }
+
+  /* GRAIN OVERLAY */
+  #grain {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 200;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    header { padding: 20px 24px; }
+    nav { display: none; }
+    #text-feature1, #text-feature2 {
+      left: 50%; right: auto;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      max-width: 85vw;
+    }
+    .specs-grid { grid-template-columns: 1fr; }
+    .spec-item:nth-child(odd) { padding-right: 0; border-right: none; }
+    .spec-item:nth-child(even) { padding-left: 0; }
+    #scroll-progress { right: 16px; }
+    #footer { flex-direction: column; gap: 16px; text-align: center; }
+  }
+
+  @media (max-width: 480px) {
+    #text-hero h1 { font-size: 36px; }
+    #text-hero p { font-size: 12px; }
+    .feature-headline { font-size: 24px; }
+  }
+
+  /* TOUCH DEVICE: no custom cursor */
+  @media (hover: none) {
+    #cursor, #cursor-ring { display: none; }
+    body { cursor: auto; }
+    .btn-primary { cursor: pointer; }
+    nav a { cursor: pointer; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Grain overlay -->
+<div id="grain"></div>
+
+<!-- Custom cursor -->
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<!-- Preloader -->
+<div id="preloader">
+  <div class="preloader-brand">MAN<span>WAH</span></div>
+  <div class="spinner-wrap">
+    <div class="spinner"></div>
+    <div class="spinner-inner"></div>
+  </div>
+  <div id="preload-progress">LOADING 0%</div>
+</div>
+
+<!-- Vertical lines -->
+<div class="vert-line" id="vl1"></div>
+<div class="vert-line" id="vl2"></div>
+
+<!-- Header -->
+<header>
+  <div class="logo">MAN<em>WAH</em></div>
+  <nav>
+    <a href="#">Technology</a>
+    <a href="#">Design</a>
+    <a href="#">Pricing</a>
+    <a href="#">Waitlist</a>
+  </nav>
+</header>
+
+<!-- Scroll progress dots -->
+<div id="scroll-progress">
+  <div class="progress-dot active" data-idx="0"></div>
+  <div class="progress-dot" data-idx="1"></div>
+  <div class="progress-dot" data-idx="2"></div>
+  <div class="progress-dot" data-idx="3"></div>
+</div>
+
+<!-- Main canvas section (400vh) -->
+<div id="canvas-section">
+  <div id="sticky-canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+
+    <!-- Text: Hero (0%) -->
+    <div class="text-overlay" id="text-hero">
+      <p class="eyebrow">Next-Gen Manga Reader</p>
+      <h1>READ<br><em>BEYOND</em></h1>
+      <p>Engineered for the purist. Every panel rendered with precision ink-black contrast. Built to disappear so the story never does.</p>
+    </div>
+
+    <!-- Text: Feature 1 (30%) -->
+    <div class="text-overlay" id="text-feature1">
+      <span class="feature-num">01</span>
+      <div class="feature-label">Display Technology</div>
+      <h2 class="feature-headline">Ink-Black<br>E-Ink Core</h2>
+      <p class="feature-body">A 10.3" flexible E-Ink panel with 330 PPI resolution. Every screen component precision-engineered for zero reflection and maximum contrast — even in direct sunlight.</p>
+    </div>
+
+    <!-- Text: Feature 2 (60%) -->
+    <div class="text-overlay" id="text-feature2">
+      <span class="feature-num">02</span>
+      <div class="feature-label">Haptic Architecture</div>
+      <h2 class="feature-headline">Feel Every<br>Page Turn</h2>
+      <p class="feature-body">Six independent haptic actuators simulate the texture of paper. The internal layout is exposed here — a symphony of precision components working in harmonic silence.</p>
+    </div>
+
+    <!-- Text: CTA (90%) -->
+    <div class="text-overlay" id="text-cta">
+      <div class="feature-label">Join the Future</div>
+      <h2 class="cta-headline">Your Story<br>Awaits.</h2>
+      <p class="cta-sub">Shipping Q3 2025 · Limited First Edition</p>
+      <a href="#" class="btn-primary">Reserve Now</a>
+    </div>
+  </div>
+</div>
+
+<!-- Specs section -->
+<div id="specs-section">
+  <div class="specs-grid">
+    <div class="spec-item">
+      <div class="spec-num">330</div>
+      <div class="spec-label">PPI Resolution</div>
+    </div>
+    <div class="spec-item">
+      <div class="spec-num">6W</div>
+      <div class="spec-label">Haptic Engine Array</div>
+    </div>
+    <div class="spec-item">
+      <div class="spec-num">8wk</div>
+      <div class="spec-label">Battery Life</div>
+    </div>
+    <div class="spec-item">
+      <div class="spec-num">187g</div>
+      <div class="spec-label">Ultra-Light Frame</div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div id="footer">
+  <div class="logo">MAN<em style="color:var(--accent)">WAH</em></div>
+  <div>© 2025 MANWAH Inc. All rights reserved.</div>
+  <div>MANGA READER — FIRST EDITION</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ───── CONFIGURATION ─────
+  // To use real images, set USE_REAL_IMAGES = true and update:
+  //   FRAME_PREFIX, FRAME_COUNT, IMAGE_PATH
+  const USE_REAL_IMAGES = false;
+  const FRAME_PREFIX = 'frame';       // e.g. "frame" → frame_0.webp
+  const IMAGE_PATH = './frames/';     // folder containing images
+  const FRAME_COUNT = 80;             // total number of frames
+
+  // ───── DOM ─────
+  const canvas = document.getElementById('main-canvas');
+  const ctx = canvas.getContext('2d');
+  const preloader = document.getElementById('preloader');
+  const progressLabel = document.getElementById('preload-progress');
+  const canvasSection = document.getElementById('canvas-section');
+  const cursorEl = document.getElementById('cursor');
+  const cursorRing = document.getElementById('cursor-ring');
+
+  let frames = [];
+  let currentFrame = 0;
+  let raf = null;
+
+  // ───── CANVAS RESIZE ─────
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    drawFrame(currentFrame);
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  // ───── PROCEDURAL FRAME GENERATOR (fallback) ─────
+  // Generates beautiful procedural product visualization when no real images are provided
+  function generateProceduralFrame(index, total) {
+    const offscreen = document.createElement('canvas');
+    const W = 1080, H = 1080;
+    offscreen.width = W;
+    offscreen.height = H;
+    const c = offscreen.getContext('2d');
+
+    const t = index / Math.max(total - 1, 1);      // 0→1 progress
+    const explodeT = Math.sin(t * Math.PI);           // 0→1→0 explosion arc
+    const CENTER_X = W / 2, CENTER_Y = H / 2;
+
+    // Background
+    c.fillStyle = '#080808';
+    c.fillRect(0, 0, W, H);
+
+    // Subtle radial glow
+    const glowR = c.createRadialGradient(CENTER_X, CENTER_Y, 0, CENTER_X, CENTER_Y, 420);
+    glowR.addColorStop(0, `rgba(232,255,71,${0.03 + explodeT * 0.06})`);
+    glowR.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = glowR;
+    c.fillRect(0, 0, W, H);
+
+    // ─── DEVICE LAYERS ───
+    const layers = [
+      { label: 'E-INK PANEL',    baseY: -150, color: '#e8ff47', h: 18,  w: 320, alpha: 1 },
+      { label: 'TOUCH SENSOR',   baseY: -100, color: '#b0c4ff', h: 12,  w: 310, alpha: 0.9 },
+      { label: 'DISPLAY DRIVER', baseY: -50,  color: '#88aaff', h: 16,  w: 290, alpha: 0.85 },
+      { label: 'LOGIC BOARD',    baseY:  0,   color: '#55ff99', h: 22,  w: 340, alpha: 1 },
+      { label: 'BATTERY',        baseY:  50,  color: '#ffd055', h: 28,  w: 280, alpha: 0.95 },
+      { label: 'HAPTICS',        baseY:  100, color: '#ff6b6b', h: 14,  w: 300, alpha: 0.9 },
+      { label: 'CHASSIS',        baseY:  150, color: '#c0c0c0', h: 24,  w: 360, alpha: 1 },
+    ];
+
+    layers.forEach((layer, i) => {
+      const spread = explodeT * 80;
+      const dir = i < layers.length / 2 ? -1 : 1;
+      const offsetY = dir * spread * (0.5 + Math.abs(i - layers.length / 2) / layers.length);
+      const x = CENTER_X - layer.w / 2;
+      const y = CENTER_Y + layer.baseY + offsetY;
+
+      // Layer body
+      c.save();
+      c.globalAlpha = layer.alpha;
+
+      // Shadow
+      c.shadowColor = layer.color;
+      c.shadowBlur = 20 + explodeT * 30;
+
+      const grad = c.createLinearGradient(x, y, x, y + layer.h);
+      grad.addColorStop(0, layer.color + 'cc');
+      grad.addColorStop(0.5, layer.color + '55');
+      grad.addColorStop(1, layer.color + '22');
+      c.fillStyle = grad;
+      roundRect(c, x, y, layer.w, layer.h, 3);
+      c.fill();
+
+      // Top edge highlight
+      c.shadowBlur = 0;
+      c.fillStyle = layer.color + 'ff';
+      roundRect(c, x, y, layer.w, 1.5, 1);
+      c.fill();
+
+      // Side depth
+      if (explodeT > 0.1) {
+        c.globalAlpha = layer.alpha * explodeT * 0.5;
+        c.fillStyle = layer.color + '33';
+        const depth = 8 * explodeT;
+        c.beginPath();
+        c.moveTo(x + layer.w, y);
+        c.lineTo(x + layer.w + depth, y - depth * 0.5);
+        c.lineTo(x + layer.w + depth, y + layer.h - depth * 0.5);
+        c.lineTo(x + layer.w, y + layer.h);
+        c.closePath();
+        c.fill();
+      }
+
+      // Label (appears when exploded)
+      if (explodeT > 0.15) {
+        c.globalAlpha = Math.min(1, (explodeT - 0.15) / 0.3);
+        c.font = '10px "DM Mono", monospace';
+        c.fillStyle = layer.color;
+        c.letterSpacing = '0.15em';
+        c.fillText(layer.label, x + layer.w + 12, y + layer.h / 2 + 4);
+        // Connecting line
+        c.strokeStyle = layer.color + '44';
+        c.lineWidth = 0.5;
+        c.beginPath();
+        c.moveTo(x + layer.w + 2, y + layer.h / 2);
+        c.lineTo(x + layer.w + 10, y + layer.h / 2);
+        c.stroke();
+      }
+
+      c.restore();
+    });
+
+    // ─── PCB TRACKS (logic board detail) ───
+    if (explodeT > 0.3) {
+      c.save();
+      c.globalAlpha = (explodeT - 0.3) / 0.4 * 0.6;
+      const bx = CENTER_X - 170, by = CENTER_Y - 11;
+      c.strokeStyle = '#55ff99';
+      c.lineWidth = 0.8;
+      for (let j = 0; j < 6; j++) {
+        c.beginPath();
+        c.moveTo(bx + 20 + j * 50, by);
+        c.lineTo(bx + 20 + j * 50, by + 22);
+        c.stroke();
+      }
+      // Chips
+      c.fillStyle = '#1a2a1a';
+      c.strokeStyle = '#55ff99';
+      c.lineWidth = 0.5;
+      [[bx+40,by+5,30,12],[bx+110,by+3,50,16]].forEach(([rx,ry,rw,rh]) => {
+        roundRect(c, rx, ry, rw, rh, 2);
+        c.fill();
+        c.stroke();
+      });
+      c.restore();
+    }
+
+    // ─── OUTER RING ───
+    c.save();
+    c.globalAlpha = 0.15 + explodeT * 0.1;
+    c.strokeStyle = '#e8ff47';
+    c.lineWidth = 0.5;
+    c.setLineDash([4, 8]);
+    c.beginPath();
+    c.arc(CENTER_X, CENTER_Y, 250 + explodeT * 60, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+    c.restore();
+
+    // ─── PROGRESS ARC ───
+    c.save();
+    c.globalAlpha = 0.4;
+    c.strokeStyle = '#e8ff47';
+    c.lineWidth = 1;
+    c.beginPath();
+    c.arc(CENTER_X, CENTER_Y, 260 + explodeT * 65, -Math.PI / 2, -Math.PI / 2 + t * Math.PI * 2);
+    c.stroke();
+    c.restore();
+
+    // Return as ImageBitmap-like object via data URL → Image
+    return offscreen;
+  }
+
+  function roundRect(ctx2, x, y, w, h, r) {
+    ctx2.beginPath();
+    ctx2.moveTo(x + r, y);
+    ctx2.lineTo(x + w - r, y);
+    ctx2.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx2.lineTo(x + w, y + h - r);
+    ctx2.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx2.lineTo(x + r, y + h);
+    ctx2.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx2.lineTo(x, y + r);
+    ctx2.quadraticCurveTo(x, y, x + r, y);
+    ctx2.closePath();
+  }
+
+  // ───── DRAW FRAME ─────
+  function drawFrame(idx) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#080808';
+    ctx.fillRect(0, 0, W, H);
+
+    if (!frames.length) return;
+    const frame = frames[Math.min(idx, frames.length - 1)];
+
+    // Letterbox: maintain aspect ratio
+    const iW = frame.width || frame.naturalWidth || 1080;
+    const iH = frame.height || frame.naturalHeight || 1080;
+    const scale = Math.min(W / iW, H / iH);
+    const dW = iW * scale, dH = iH * scale;
+    const dx = (W - dW) / 2, dy = (H - dH) / 2;
+
+    ctx.drawImage(frame, dx, dy, dW, dH);
+  }
+
+  // ───── LOAD IMAGES ─────
+  function loadImages(callback) {
+    if (!USE_REAL_IMAGES) {
+      // Generate procedural frames
+      progressLabel.textContent = 'GENERATING FRAMES...';
+      const total = FRAME_COUNT;
+      let done = 0;
+      frames = new Array(total);
+
+      function genNext(i) {
+        if (i >= total) { callback(); return; }
+        const offscreen = generateProceduralFrame(i, total);
+        // Convert offscreen canvas to image
+        const img = new Image();
+        img.src = offscreen.toDataURL('image/png');
+        img.onload = () => {
+          frames[i] = img;
+          done++;
+          progressLabel.textContent = `GENERATING ${Math.round(done / total * 100)}%`;
+          // Use setTimeout to avoid blocking UI
+          setTimeout(() => genNext(i + 1), 0);
+        };
+      }
+      // Use requestIdleCallback or batch
+      batchGenerate(0, total, callback);
+      return;
+    }
+
+    // Real image loading
+    const total = FRAME_COUNT;
+    let loaded = 0;
+    frames = new Array(total);
+    for (let i = 0; i < total; i++) {
+      const img = new Image();
+      img.src = `${IMAGE_PATH}${FRAME_PREFIX}_${i}.webp`;
+      img.onload = img.onerror = () => {
+        frames[i] = img;
+        loaded++;
+        progressLabel.textContent = `LOADING ${Math.round(loaded / total * 100)}%`;
+        if (loaded === total) callback();
+      };
+    }
+  }
+
+  function batchGenerate(start, total, callback) {
+    const BATCH = 5;
+    let completed = 0;
+    frames = new Array(total);
+
+    function processBatch(batchStart) {
+      const end = Math.min(batchStart + BATCH, total);
+      for (let i = batchStart; i < end; i++) {
+        const offscreen = generateProceduralFrame(i, total);
+        const img = new Image();
+        img.src = offscreen.toDataURL('image/png');
+        img.onload = () => {
+          frames[i] = img;
+          completed++;
+          progressLabel.textContent = `GENERATING ${Math.round(completed / total * 100)}%`;
+          if (completed === total) callback();
+        };
+      }
+      if (end < total) requestAnimationFrame(() => processBatch(end));
+    }
+    processBatch(start);
+  }
+
+  // ───── SCROLL HANDLER ─────
+  let targetFrame = 0;
+  let renderFrame = 0;
+  let ticking = false;
+
+  function onScroll() {
+    const sectionTop = canvasSection.offsetTop;
+    const sectionH = canvasSection.offsetHeight - window.innerHeight;
+    const scrolled = Math.max(0, window.scrollY - sectionTop);
+    const progress = Math.min(1, scrolled / sectionH);
+
+    targetFrame = Math.round(progress * (frames.length - 1));
+    updateTextOverlays(progress);
+    updateProgressDots(progress);
+
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(renderLoop);
+    }
+  }
+
+  function renderLoop() {
+    ticking = false;
+    if (currentFrame !== targetFrame) {
+      // Lerp toward target
+      currentFrame += (targetFrame - currentFrame) > 0 ? 1 : -1;
+      if (currentFrame !== targetFrame) {
+        ticking = true;
+        requestAnimationFrame(renderLoop);
+      }
+    }
+    drawFrame(currentFrame);
+  }
+
+  // ───── TEXT OVERLAYS ─────
+  const textHero = document.getElementById('text-hero');
+  const textF1 = document.getElementById('text-feature1');
+  const textF2 = document.getElementById('text-feature2');
+  const textCta = document.getElementById('text-cta');
+
+  function fadeText(el, opacity, translateY) {
+    el.style.opacity = opacity;
+    el.style.transform = el.id === 'text-hero'
+      ? `translate(-50%, calc(-50% + ${translateY}px))`
+      : el.id === 'text-cta'
+        ? `translate(-50%, calc(-50% + ${translateY}px))`
+        : el.id === 'text-feature2'
+          ? `translateY(calc(-50% + ${translateY}px))`
+          : `translateY(calc(-50% + ${translateY}px))`;
+  }
+
+  function updateTextOverlays(p) {
+    // Hero: 0 → 0.18 (fade out starts at 0.12)
+    {
+      const o = p < 0.12 ? 1 : p < 0.22 ? 1 - (p - 0.12) / 0.1 : 0;
+      const ty = p * -40;
+      fadeText(textHero, o, ty);
+    }
+    // Feature 1: 0.22 → 0.50
+    {
+      const inP = 0.22, inE = 0.32, outS = 0.44, outE = 0.54;
+      const o = p < inP ? 0 : p < inE ? (p - inP) / (inE - inP) : p < outS ? 1 : p < outE ? 1 - (p - outS) / (outE - outS) : 0;
+      const ty = p < inE ? (1 - (p - inP) / (inE - inP)) * 30 : 0;
+      fadeText(textF1, Math.max(0, Math.min(1, o)), ty);
+    }
+    // Feature 2: 0.54 → 0.80
+    {
+      const inP = 0.54, inE = 0.64, outS = 0.72, outE = 0.82;
+      const o = p < inP ? 0 : p < inE ? (p - inP) / (inE - inP) : p < outS ? 1 : p < outE ? 1 - (p - outS) / (outE - outS) : 0;
+      const ty = p < inE ? (1 - (p - inP) / (inE - inP)) * 30 : 0;
+      fadeText(textF2, Math.max(0, Math.min(1, o)), ty);
+    }
+    // CTA: 0.85 → 1
+    {
+      const o = p < 0.85 ? 0 : p < 0.95 ? (p - 0.85) / 0.1 : 1;
+      const ty = p < 0.95 ? (1 - (p - 0.85) / 0.1) * 30 : 0;
+      fadeText(textCta, Math.max(0, Math.min(1, o)), ty);
+    }
+  }
+
+  // ───── PROGRESS DOTS ─────
+  const dots = document.querySelectorAll('.progress-dot');
+  function updateProgressDots(p) {
+    const idx = p < 0.25 ? 0 : p < 0.5 ? 1 : p < 0.75 ? 2 : 3;
+    dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+  }
+
+  // ───── CURSOR ─────
+  let mx = 0, my = 0;
+  let rx = 0, ry = 0;
+  const isTouchDevice = window.matchMedia('(hover: none)').matches;
+
+  if (!isTouchDevice) {
+    document.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+      cursorEl.style.left = mx + 'px';
+      cursorEl.style.top = my + 'px';
+    });
+    function animCursor() {
+      rx += (mx - rx) * 0.15;
+      ry += (my - ry) * 0.15;
+      cursorRing.style.left = rx + 'px';
+      cursorRing.style.top = ry + 'px';
+      requestAnimationFrame(animCursor);
+    }
+    animCursor();
+  }
+
+  // ───── INIT ─────
+  function init() {
+    resizeCanvas();
+    // Set initial states
+    [textF1, textF2, textCta].forEach(el => { el.style.opacity = '0'; });
+    textHero.style.opacity = '1';
+    textHero.style.transition = 'none';
+    [textF1, textF2, textCta].forEach(el => { el.style.transition = 'none'; });
+
+    loadImages(() => {
+      drawFrame(0);
+      preloader.classList.add('hidden');
+      window.addEventListener('scroll', onScroll, { passive: true });
+    });
+  }
+
+  // Wait for fonts + DOM
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // ───── PASSIVE TOUCH PERF FIX ─────
+  // Ensure no jank on iOS Safari overscroll
+  document.addEventListener('touchstart', () => {}, { passive: true });
+
+})();
+</script>
+</body>
+</html>
